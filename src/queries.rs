@@ -27,6 +27,14 @@ pub struct Delete {
     values: Option<Vec<BoxedValue>>,
 }
 
+pub struct UpdateBlob {
+    sql: String,
+    data: Vec<u8>,
+    row_id: i64,
+    table_name: String,
+    field_name: String,
+}
+
 impl Generic {
     pub fn create(sql: String, values: Vec<impl ToSql + Send + 'static>) -> Result<Query, &'static str> {
 
@@ -160,6 +168,20 @@ impl Delete {
         Ok(Box::new(Delete {
             sql,
             values: params,
+        }))
+    }
+}
+
+impl UpdateBlob {
+    pub fn create(table_name: String, field_name: String, row_id: i64, data: Vec<u8>) -> Result<Query, &'static str> {
+        let sql = format!("UPDATE {} SET {} = ZEROBLOB({}) WHERE rowid = {};", table_name, field_name, data.len(), row_id);
+
+        Ok(Box::new(UpdateBlob {
+            sql,
+            data,
+            row_id,
+            table_name,
+            field_name
         }))
     }
 }
@@ -299,6 +321,33 @@ impl Queryable for Delete {
 
     fn get_type_name(&self) -> &'static str {
         "DELETE"
+    }
+
+    fn get_raw_sql(&self) -> &str {
+        self.sql.as_str()
+    }
+}
+
+impl Queryable for UpdateBlob {
+    fn execute(&self, connection: &Connection) -> Result<(), &'static str> {
+        match connection.execute(&self.sql, NO_PARAMS) {
+            Ok(_) => {
+                let row_id = self.row_id;
+
+                let mut b = connection.blob_open(DatabaseName::Main, self.table_name.as_str(), self.field_name.as_str(), self.row_id, false).unwrap();
+                b.write_at(self.data.as_slice(), 0);
+
+                Ok(())
+            }
+            Err(err) => {
+                println!("Err: {:?}", err);
+                Err("Could not execute `UPDATE`. Table might not exist, there is an issue with the query or the database is unavailable.")
+            }
+        }
+    }
+
+    fn get_type_name(&self) -> &'static str {
+        "UPDATE_BLOB"
     }
 
     fn get_raw_sql(&self) -> &str {
