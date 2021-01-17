@@ -143,11 +143,19 @@ impl DataWriter {
         })
     }
 
-    pub fn post(&self, query: WriteRequest) -> Result<(), &'static str> {
-        match self.sender.send(query) {
+    pub fn post(&self, request: WriteRequest) -> Result<(), &'static str> {
+        match self.sender.send(request) {
             Ok(_) => Ok(()),
             Err(_) => Err("Could not send query. Check `db_writer` channel is not closed.")
         }
+    }
+    
+    pub fn post_query(&self, query: Query) -> Result<(), &'static str> {
+        self.post(WriteRequest::Query(query))
+    }
+
+    pub fn post_transaction(&self, transaction: Transaction) -> Result<(), &'static str> {
+        self.post(WriteRequest::Transaction(transaction))
     }
 }
 
