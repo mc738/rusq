@@ -67,16 +67,17 @@ impl BlobRef {
 
     /// A static method to deconstruct a blob reference and return the raw blob data.
     /// The reference is considered spent once this is called.
-    pub fn get(table: String, field: String, blob_ref: BlobRef) -> Result<BlobValue, & 'static str> {
+    pub fn get<T>(table: T, field: T, blob_ref: BlobRef) -> Result<BlobValue, & 'static str> where T : Into<String> {
 
+        
         let data = match blob_ref {
             BlobRef::File(path) => unimplemented!(),
             BlobRef::Memory(data) => Ok(data)
         }?;
-
+        
         Ok(BlobValue {
-            table,
-            field,
+            table: table.into(),
+            field: field.into(),
             data
         })
 
@@ -93,16 +94,16 @@ impl Criteria {
 }
 
 impl Value {
-    pub fn create(field: String, value: impl ToSql + Send + 'static) -> Value {
+    pub fn create<T>(field: T, value: impl ToSql + Send + 'static) -> Value where T : Into<String> {
         Value {
-            field,
+            field: field.into(),
             value: ValueType::BoxedValue(Box::new(value))
         }
     }
 
-    pub fn create_blob(field: String, value: BlobRef) -> Value {
+    pub fn create_blob<T>(field: T, value: BlobRef) -> Value where T : Into<String> {
         Value {
-            field,
+            field: field.into(),
             value: ValueType::Blob(value)
         }
     }

@@ -36,7 +36,7 @@ pub struct UpdateBlob {
 }
 
 impl Generic {
-    pub fn create(sql: String, values: Vec<impl ToSql + Send + 'static>) -> Result<Query, &'static str> {
+    pub fn create<T>(sql: T, values: Vec<impl ToSql + Send + 'static>) -> Result<Query, &'static str> where T : Into<String> {
 
         //let params = params! [ values ];
 
@@ -47,15 +47,18 @@ impl Generic {
         }
 
         Ok(Box::new(Generic {
-            sql,
+            sql: sql.into(),
             values: params,
         }))
     }
 }
 
 impl Insert {
-    pub fn create(table_name: String, values: Vec<Value>) -> Result<Query, &'static str> {
-        let (fields, params_string, values, blobs) = Insert::handle_values(table_name.clone(), values)?;
+    pub fn create<T>(table_name: T, values: Vec<Value>) -> Result<Query, &'static str> where T : Into<String> {
+        
+        let table_name = table_name.into();
+        
+        let (fields, params_string, values, blobs) = Insert::handle_values(&table_name, values)?;
         let sql = format!("INSERT INTO {} ({}) VALUES ({});", table_name, fields, params_string);
 
 
@@ -66,7 +69,7 @@ impl Insert {
         }))
     }
 
-    fn handle_values(table_name: String, values: Vec<Value>) -> Result<(String, String, Vec<BoxedValue>, Option<Vec<BlobValue>>), &'static str> {
+    fn handle_values(table_name: &str, values: Vec<Value>) -> Result<(String, String, Vec<BoxedValue>, Option<Vec<BlobValue>>), &'static str> {
         let mut fields = Vec::new();
         let mut params_string = Vec::new();
         let mut result_values: Vec<BoxedValue> = Vec::new();
@@ -81,14 +84,12 @@ impl Insert {
 
             match value.value {
                 ValueType::BoxedValue(boxed) => {
-                    println!("TEST");
                     params_string.push(format!("?{}", counter));
                     result_values.push(boxed);
                     counter = counter + 1;
                 }
                 ValueType::Blob(blob) => {
-                    println!("{}", value.field);
-                    let loaded_blob = BlobRef::get(table_name.clone(), value.field.clone(), blob)?;
+                    let loaded_blob = BlobRef::get(table_name.clone(), value.field.as_str(), blob)?;
                     params_string.push(format!("ZEROBLOB({})", loaded_blob.data.len()));
                     blobs.push(loaded_blob);
                 }
@@ -100,16 +101,19 @@ impl Insert {
 }
 
 impl Create {
-    pub fn create(sql: String) -> Result<Query, &'static str> {
+    pub fn create<T>(sql: T) -> Result<Query, &'static str> where T : Into<String> {
         Ok(Box::new(Create {
-            sql
+            sql: sql.into()
         }))
     }
 }
 
 impl Update {
-    pub fn create(table_name: String, values: Vec<Value>, criteria: Criteria) -> Result<Query, &'static str> {
-        let (params_string, mut values, blobs) = Update::handle_values(table_name.clone(), values)?;
+    pub fn create<T>(table_name: T, values: Vec<Value>, criteria: Criteria) -> Result<Query, &'static str> where T : Into<String> {
+
+        let table_name = table_name.into();
+        
+        let (params_string, mut values, blobs) = Update::handle_values(&table_name, values)?;
         let (criteria_string, params) = Criteria::handle(criteria);
 
         let sql = format!("UPDATE {} SET {} WHERE {};", table_name, params_string, criteria_string);
@@ -127,7 +131,7 @@ impl Update {
     }
 
 
-    pub fn handle_values(table_name: String, values: Vec<Value>) -> Result<(String, Vec<BoxedValue>, Option<Vec<BlobValue>>), &'static str> {
+    fn handle_values(table_name: &str, values: Vec<Value>) -> Result<(String, Vec<BoxedValue>, Option<Vec<BlobValue>>), &'static str> {
         //let mut fields = Vec::new();
         let mut params_string = Vec::new();
         let mut result_values: Vec<BoxedValue> = Vec::new();
@@ -147,7 +151,7 @@ impl Update {
                     counter = counter + 1;
                 }
                 ValueType::Blob(blob) => {
-                    let loaded_blob = BlobRef::get(table_name.clone(), value.field.clone(), blob)?;
+                    let loaded_blob = BlobRef::get(table_name.clone(), value.field.as_str(), blob)?;
                     params_string.push(format!("{} = ZEROBLOB({})", value.field, loaded_blob.data.len()));
                     blobs.push(loaded_blob);
                 }
@@ -159,7 +163,10 @@ impl Update {
 }
 
 impl Delete {
-    pub fn create(table_name: String, criteria: Criteria) -> Result<Query, &'static str> {
+    pub fn create<T>(table_name: T, criteria: Criteria) -> Result<Query, &'static str> where T : Into<String> {
+
+        let table_name = table_name.into();
+        
         let (criteria_string, params) = Criteria::handle(criteria);
 
         let sql = format!("DELETE FROM {} WHERE {};", table_name, criteria_string);
@@ -173,8 +180,12 @@ impl Delete {
 }
 
 impl UpdateBlob {
-    pub fn create(table_name: String, field_name: String, row_id: i64, data: Vec<u8>) -> Result<Query, &'static str> {
-        let sql = format!("UPDATE {} SET {} = ZEROBLOB({}) WHERE rowid = {};", table_name, field_name, data.len(), row_id);
+    pub fn create<T>(table_name: T, field_name: T, row_id: i64, data: Vec<u8>) -> Result<Query, &'static str> where T : Into<String>{
+
+        let table_name = table_name.into();
+        let field_name = field_name.into();
+        
+        let sql = format!("UPDATE {} SET {} = ZEROBLOB({}) WHERE rowid = {};", table_name.clone(), field_name.clone(), data.len(), row_id);
 
         Ok(Box::new(UpdateBlob {
             sql,
